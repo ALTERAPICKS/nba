@@ -24,5 +24,4 @@ jobs:
 
       - name: Run NBA model
         run: |
-          cd nba_prediction_system
           python master_projection_engine.py
