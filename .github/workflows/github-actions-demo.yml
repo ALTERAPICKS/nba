@@ -1,8 +1,8 @@
 name: NBA Model – Python Test
 
 on:
-  push:
   workflow_dispatch:
+  push:
 
 jobs:
   python-test:
@@ -24,4 +24,5 @@ jobs:
 
       - name: Run NBA model
         run: |
-          python nba_prediction_system/master_projection_engine.py
+          cd nba_prediction_system
+          python master_projection_engine.py
