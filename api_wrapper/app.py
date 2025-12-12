@@ -12,4 +12,3 @@ def health():
 @cached_response(ttl=3600)
 def team_dashboard(team_id: int, last_n_games: int = 5):
     return get_team_dashboard(team_id, last_n_games)
-
