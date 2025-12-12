@@ -16,12 +16,12 @@ STEP 9: Apply pace adjustment (OPTIONAL) → pace-adjusted total
 
 import sys
 import time
+import requests
 from typing import Dict, List, Tuple
 from datetime import datetime
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import (
     teamdashboardbygeneralsplits,
-    scoreboardv2,
     commonteamroster,
     playercareerstats
 )
@@ -736,27 +736,88 @@ class MasterProjectionEngine:
     def get_todays_games(self) -> List[Tuple[str, str]]:
         """
         Fetch today's NBA schedule
+        Uses ESPN's public scoreboard API (reliable in cloud environments)
 
         Returns:
             List of (away_team, home_team) tuples
         """
         print("Fetching today's NBA schedule...")
 
-        scoreboard = scoreboardv2.ScoreboardV2()
-        games = scoreboard.get_data_frames()[0]
+        try:
+            # Fetch from ESPN's public scoreboard API
+            url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
 
-        matchups = []
-        for _, game in games.iterrows():
-            home_team_id = game['HOME_TEAM_ID']
-            away_team_id = game['VISITOR_TEAM_ID']
+            data = response.json()
+            events = data.get('events', [])
 
-            home_team = self.get_team_name_by_id(home_team_id)
-            away_team = self.get_team_name_by_id(away_team_id)
+            if len(events) == 0:
+                print("No games scheduled for today.\n")
+                return []
 
-            matchups.append((away_team, home_team))
+            matchups = []
 
-        print(f"✓ Found {len(matchups)} games today\n")
-        return matchups
+            for event in events:
+                competitions = event.get('competitions', [])
+                if not competitions:
+                    continue
+
+                competition = competitions[0]
+                competitors = competition.get('competitors', [])
+
+                if len(competitors) < 2:
+                    continue
+
+                # ESPN format: competitors[0] is home, competitors[1] is away
+                home_competitor = competitors[0] if competitors[0].get('homeAway') == 'home' else competitors[1]
+                away_competitor = competitors[1] if competitors[0].get('homeAway') == 'home' else competitors[0]
+
+                home_abbr = home_competitor.get('team', {}).get('abbreviation', '')
+                away_abbr = away_competitor.get('team', {}).get('abbreviation', '')
+
+                # Convert abbreviations to full team names
+                home_team = self._espn_abbr_to_full_name(home_abbr)
+                away_team = self._espn_abbr_to_full_name(away_abbr)
+
+                matchups.append((away_team, home_team))
+
+            print(f"✓ Found {len(matchups)} games today\n")
+            return matchups
+
+        except requests.RequestException as e:
+            raise Exception(f"Failed to fetch schedule from ESPN API: {e}")
+        except Exception as e:
+            print(f"Error parsing schedule: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def _espn_abbr_to_full_name(self, abbr: str) -> str:
+        """
+        Convert ESPN team abbreviation to full team name
+        Handles differences between ESPN and nba_api abbreviations
+        """
+        # ESPN -> nba_api abbreviation mapping for mismatches
+        espn_to_nba = {
+            'WSH': 'WAS',  # Washington
+            'UTAH': 'UTA',  # Utah
+            'GS': 'GSW',    # Golden State
+            'SA': 'SAS',    # San Antonio
+            'NY': 'NYK',    # New York
+            'NO': 'NOP'     # New Orleans
+        }
+
+        # Convert ESPN abbreviation if needed
+        nba_abbr = espn_to_nba.get(abbr, abbr)
+
+        # Find team by nba_api abbreviation
+        for team in self.all_teams:
+            if team['abbreviation'] == nba_abbr:
+                return team['full_name']
+
+        # Fallback: return original abbreviation if not found
+        return abbr
 
     def project_all_games(self):
         """
@@ -929,4 +990,3 @@ if __name__ == "__main__":
     # Run master projection engine
     engine = MasterProjectionEngine()
     engine.project_all_games()
-
