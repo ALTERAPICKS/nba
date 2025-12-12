@@ -30,8 +30,18 @@ from nba_api.stats.endpoints import (
 BASE_URL = "https://nba-e6du.onrender.com"
 
 def get_team_dashboard(team_id, last_n):
+    if not last_n or last_n <= 0:
+        last_n = 5
+
     url = f"{BASE_URL}/team-dashboard/{team_id}"
-    return requests.get(url, params={"last_n_games": last_n}).json()
+    resp = requests.get(
+        url,
+        params={"last_n_games": last_n},
+        timeout=15
+    )
+    resp.raise_for_status()
+    return resp.json()
+
 from injury_processor import InjuryProcessor
 from player_stats_processor import PlayerStatsProcessor
 from rest_adjustment_module import RestAdjustmentModule
