@@ -6,10 +6,10 @@ NBA Statistical Projection Model
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import (
     teamdashboardbygeneralsplits,
-    teamdashboardbyshootingsplits,
-    scoreboardv2
+    teamdashboardbyshootingsplits
 )
 import pandas as pd
+import requests
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -60,6 +60,7 @@ class NBAStatisticalModel:
     def get_todays_schedule(self) -> List[Dict]:
         """
         Get today's NBA schedule with home/away teams identified
+        Uses ESPN's public scoreboard API (reliable in cloud environments)
         """
         today = datetime.now().strftime('%m/%d/%Y')
 
@@ -67,29 +68,53 @@ class NBAStatisticalModel:
         print("=" * 80)
 
         try:
-            scoreboard = scoreboardv2.ScoreboardV2(game_date=today)
-            games = scoreboard.get_data_frames()[0]
+            # Fetch from ESPN's public scoreboard API
+            url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
 
-            if len(games) == 0:
+            data = response.json()
+            events = data.get('events', [])
+
+            if len(events) == 0:
                 print("No games scheduled for today.")
                 return []
 
             schedule = []
 
-            for idx, game in games.iterrows():
-                home_team_id = game['HOME_TEAM_ID']
-                away_team_id = game['VISITOR_TEAM_ID']
-                game_id = game['GAME_ID']
-                game_time = game.get('GAME_STATUS_TEXT', 'TBD')
+            for event in events:
+                # Extract game info
+                event_id = event.get('id', 'unknown')
+                competitions = event.get('competitions', [])
 
-                home_team_name = self.get_team_name_by_id(home_team_id)
-                away_team_name = self.get_team_name_by_id(away_team_id)
+                if not competitions:
+                    continue
+
+                competition = competitions[0]
+                competitors = competition.get('competitors', [])
+
+                if len(competitors) < 2:
+                    continue
+
+                # ESPN format: competitors[0] is home, competitors[1] is away
+                home_competitor = competitors[0] if competitors[0].get('homeAway') == 'home' else competitors[1]
+                away_competitor = competitors[1] if competitors[0].get('homeAway') == 'home' else competitors[0]
+
+                home_abbr = home_competitor.get('team', {}).get('abbreviation', '')
+                away_abbr = away_competitor.get('team', {}).get('abbreviation', '')
+
+                # Get game status/time
+                status = event.get('status', {}).get('type', {}).get('shortDetail', 'TBD')
+
+                # Convert abbreviations to full team names
+                home_team_name = self._espn_abbr_to_full_name(home_abbr)
+                away_team_name = self._espn_abbr_to_full_name(away_abbr)
 
                 schedule.append({
-                    'game_id': game_id,
+                    'game_id': event_id,
                     'away_team': away_team_name,
                     'home_team': home_team_name,
-                    'game_time': game_time
+                    'game_time': status
                 })
 
             print(f"\nFound {len(schedule)} game(s) today:\n")
@@ -100,11 +125,39 @@ class NBAStatisticalModel:
 
             return schedule
 
+        except requests.RequestException as e:
+            raise Exception(f"Failed to fetch schedule from ESPN API: {e}")
         except Exception as e:
-            print(f"Error fetching schedule: {e}")
+            print(f"Error parsing schedule: {e}")
             import traceback
             traceback.print_exc()
             return []
+
+    def _espn_abbr_to_full_name(self, abbr: str) -> str:
+        """
+        Convert ESPN team abbreviation to full team name
+        Handles differences between ESPN and nba_api abbreviations
+        """
+        # ESPN -> nba_api abbreviation mapping for mismatches
+        espn_to_nba = {
+            'WSH': 'WAS',  # Washington
+            'UTAH': 'UTA',  # Utah
+            'GS': 'GSW',    # Golden State
+            'SA': 'SAS',    # San Antonio
+            'NY': 'NYK',    # New York
+            'NO': 'NOP'     # New Orleans
+        }
+
+        # Convert ESPN abbreviation if needed
+        nba_abbr = espn_to_nba.get(abbr, abbr)
+
+        # Find team by nba_api abbreviation
+        for team in self.all_teams:
+            if team['abbreviation'] == nba_abbr:
+                return team['full_name']
+
+        # Fallback: return original abbreviation if not found
+        return abbr
 
     def pull_team_data(self, team_name: str) -> Dict:
         """
