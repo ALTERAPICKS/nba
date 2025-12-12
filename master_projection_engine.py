@@ -29,18 +29,37 @@ from nba_api.stats.endpoints import (
 # API Wrapper Configuration
 BASE_URL = "https://nba-e6du.onrender.com"
 
+def warm_up_api():
+    try:
+        print("Warming up Render API...")
+        requests.get(f"{BASE_URL}/health", timeout=10)
+        time.sleep(10)  # allow Render + nba_api to fully wake
+    except Exception as e:
+        print(f"Warm-up warning: {e}")
+
 def get_team_dashboard(team_id, last_n):
     if not last_n or last_n <= 0:
         last_n = 5
 
     url = f"{BASE_URL}/team-dashboard/{team_id}"
-    resp = requests.get(
-        url,
-        params={"last_n_games": last_n},
-        timeout=15
-    )
-    resp.raise_for_status()
-    return resp.json()
+
+    for attempt in range(3):
+        try:
+            resp = requests.get(
+                url,
+                params={"last_n_games": last_n},
+                timeout=30
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+        except requests.exceptions.Timeout:
+            print(f"Retrying team {team_id} (attempt {attempt + 1})")
+            time.sleep(5)
+
+    # If we get here, all retries failed
+    raise RuntimeError(f"Failed to fetch dashboard for team {team_id}")
+
 
 from injury_processor import InjuryProcessor
 from player_stats_processor import PlayerStatsProcessor
@@ -825,6 +844,8 @@ class MasterProjectionEngine:
     def project_all_games(self):
         """
         Run full pipeline on all games today
+
+        warm_up_api()
 
         Also evaluates yesterday's predictions and saves today's predictions
         """
