@@ -3,17 +3,19 @@ import time
 
 SEASON = "2025-26"
 
-def _df_to_dict(df):
-    return df.iloc[0].to_dict() if not df.empty else {}
+def _overall_row(df):
+    """
+    Extract ONLY the 'Overall' row.
+    This is where OFF_RATING / DEF_RATING / PACE live.
+    """
+    if "GROUP_SET" in df.columns:
+        overall = df[df["GROUP_SET"] == "Overall"]
+        if not overall.empty:
+            return overall.iloc[0].to_dict()
+    return {}
 
 def get_team_dashboard(team_id: int, last_n_games: int = 5):
-    """
-    Fetches NBA-calculated team dashboard stats directly from nba_api.
-    Returns ALL tables required by both models.
-    """
-
-    # NBA API protection (Render cold starts)
-    time.sleep(0.6)
+    time.sleep(0.6)  # NBA API safety
 
     dashboard = teamdashboardbygeneralsplits.TeamDashboardByGeneralSplits(
         team_id=team_id,
@@ -29,10 +31,10 @@ def get_team_dashboard(team_id: int, last_n_games: int = 5):
     return {
         "team_id": team_id,
         "last_n_games": last_n_games,
-        "Base": _df_to_dict(dfs[0]),
-        "Advanced": _df_to_dict(dfs[1]),        # ✅ OFF_RATING, DEF_RATING, PACE
-        "Misc": _df_to_dict(dfs[2]),
-        "Four Factors": _df_to_dict(dfs[3]),
-        "Scoring": _df_to_dict(dfs[4]),
-        "Opponent": _df_to_dict(dfs[5])
+        "Base": _overall_row(dfs[0]),
+        "Advanced": _overall_row(dfs[1]),      # ✅ OFF_RATING / DEF_RATING / PACE
+        "Misc": _overall_row(dfs[2]),
+        "Four Factors": _overall_row(dfs[3]),
+        "Scoring": _overall_row(dfs[4]),
+        "Opponent": _overall_row(dfs[5])
     }
