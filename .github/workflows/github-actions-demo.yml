@@ -17,8 +17,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Run Python test
+      - name: Run sanity check script
         run: |
-          python - <<EOF
-          print("Python is running inside GitHub Actions")
-          EOF
+          python scripts/gha_sanity_check.py
+
