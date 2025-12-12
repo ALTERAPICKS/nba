@@ -5,13 +5,19 @@ NBA Statistical Projection Model
 
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import (
-    teamdashboardbygeneralsplits,
     teamdashboardbyshootingsplits
 )
 import pandas as pd
 import requests
 from datetime import datetime
 from typing import Dict, List, Optional
+
+# API Wrapper Configuration
+BASE_URL = "https://nba-e6du.onrender.com"
+
+def get_team_dashboard(team_id, last_n):
+    url = f"{BASE_URL}/team-dashboard/{team_id}"
+    return requests.get(url, params={"last_n_games": last_n}).json()
 
 
 class NBAStatisticalModel:
@@ -182,16 +188,8 @@ class NBAStatisticalModel:
         print(f"  Fetching Last 5 games...")
         for category in categories:
             try:
-                dashboard = teamdashboardbygeneralsplits.TeamDashboardByGeneralSplits(
-                    team_id=team_id,
-                    season=self.SEASON,
-                    measure_type_detailed_defense=category,
-                    last_n_games=5,
-                    pace_adjust='Y',
-                    per_mode_detailed='PerGame'
-                )
-                dfs = dashboard.get_data_frames()
-                team_data['last5'][category] = dfs[0].iloc[0] if len(dfs) > 0 and len(dfs[0]) > 0 else None
+                data = get_team_dashboard(team_id, last_n=5)
+                team_data['last5'][category] = pd.Series(data.get(category, {})) if data else None
             except Exception as e:
                 print(f"    Error fetching Last 5 {category}: {e}")
                 team_data['last5'][category] = None
@@ -200,16 +198,8 @@ class NBAStatisticalModel:
         print(f"  Fetching Season Average...")
         for category in categories:
             try:
-                dashboard = teamdashboardbygeneralsplits.TeamDashboardByGeneralSplits(
-                    team_id=team_id,
-                    season=self.SEASON,
-                    measure_type_detailed_defense=category,
-                    last_n_games=0,  # 0 = full season
-                    pace_adjust='Y',
-                    per_mode_detailed='PerGame'
-                )
-                dfs = dashboard.get_data_frames()
-                team_data['season'][category] = dfs[0].iloc[0] if len(dfs) > 0 and len(dfs[0]) > 0 else None
+                data = get_team_dashboard(team_id, last_n=0)
+                team_data['season'][category] = pd.Series(data.get(category, {})) if data else None
             except Exception as e:
                 print(f"    Error fetching Season {category}: {e}")
                 team_data['season'][category] = None
@@ -217,16 +207,8 @@ class NBAStatisticalModel:
         # Pull Opponent stats for normalization (Last 5 opponents)
         print(f"  Fetching Opponent stats...")
         try:
-            opponent_dash = teamdashboardbygeneralsplits.TeamDashboardByGeneralSplits(
-                team_id=team_id,
-                season=self.SEASON,
-                measure_type_detailed_defense='Opponent',
-                last_n_games=5,
-                pace_adjust='Y',
-                per_mode_detailed='PerGame'
-            )
-            dfs = opponent_dash.get_data_frames()
-            team_data['opponent_last5'] = dfs[0].iloc[0] if len(dfs) > 0 and len(dfs[0]) > 0 else None
+            data = get_team_dashboard(team_id, last_n=5)
+            team_data['opponent_last5'] = pd.Series(data.get('Opponent', {})) if data else None
         except Exception as e:
             print(f"    Error fetching Opponent stats: {e}")
             team_data['opponent_last5'] = None
