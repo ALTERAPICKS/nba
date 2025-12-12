@@ -24,4 +24,4 @@ jobs:
 
       - name: Run NBA model
         run: |
-          python master_projection_engine.py
+          python nba/master_projection_engine.py
