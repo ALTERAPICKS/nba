@@ -17,14 +17,21 @@ STEP 9: Apply pace adjustment (OPTIONAL) → pace-adjusted total
 import sys
 import time
 import requests
+import pandas as pd
 from typing import Dict, List, Tuple
 from datetime import datetime
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import (
-    teamdashboardbygeneralsplits,
     commonteamroster,
     playercareerstats
 )
+
+# API Wrapper Configuration
+BASE_URL = "https://nba-e6du.onrender.com"
+
+def get_team_dashboard(team_id, last_n):
+    url = f"{BASE_URL}/team-dashboard/{team_id}"
+    return requests.get(url, params={"last_n_games": last_n}).json()
 from injury_processor import InjuryProcessor
 from player_stats_processor import PlayerStatsProcessor
 from rest_adjustment_module import RestAdjustmentModule
@@ -115,26 +122,12 @@ class MasterProjectionEngine:
         team_id = self.get_team_id(team_name)
 
         # Fetch season stats
-        season_stats = teamdashboardbygeneralsplits.TeamDashboardByGeneralSplits(
-            team_id=team_id,
-            season=self.SEASON,
-            measure_type_detailed_defense='Advanced',
-            last_n_games=0,  # 0 = full season
-            pace_adjust='Y',
-            per_mode_detailed='PerGame'
-        )
-        team_season = season_stats.get_data_frames()[0].iloc[0]
+        season_data = get_team_dashboard(team_id, last_n=0)
+        team_season = pd.Series(season_data.get('Advanced', {}))
 
         # Fetch Last 5 stats
-        last5_stats = teamdashboardbygeneralsplits.TeamDashboardByGeneralSplits(
-            team_id=team_id,
-            season=self.SEASON,
-            measure_type_detailed_defense='Advanced',
-            last_n_games=5,
-            pace_adjust='Y',
-            per_mode_detailed='PerGame'
-        )
-        team_last5 = last5_stats.get_data_frames()[0].iloc[0]
+        last5_data = get_team_dashboard(team_id, last_n=5)
+        team_last5 = pd.Series(last5_data.get('Advanced', {}))
 
         # Apply recency weighting
         off_rtg_weighted = (team_last5['OFF_RATING'] * self.LAST5_WEIGHT +
