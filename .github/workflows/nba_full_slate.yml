@@ -2,7 +2,7 @@ name: NBA Full Slate Projections
 
 on:
   schedule:
-    - cron: "0 20 * * *"   # daily @ 4 PM EST
+    - cron: "0 21 * * *"   # daily @ 4 PM EST
   workflow_dispatch:
 
 jobs:
