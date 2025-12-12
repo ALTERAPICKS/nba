@@ -15,7 +15,7 @@ Key Features:
 
 from datetime import datetime, timedelta
 from typing import Dict, Tuple, Optional
-from nba_api.stats.endpoints import teamgamelog, scoreboardv2
+from nba_api.stats.endpoints import teamgamelog
 
 
 class RestAdjustmentModule:
