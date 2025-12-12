@@ -1,0 +1,221 @@
+INTEGRATION EXAMPLE - HOW TO SAVE PREDICTIONS FROM YOUR MODEL
+================================================================
+
+This shows you exactly how to modify master_projection_engine.py to save
+predictions for later evaluation by outcome_fetcher.py.
+
+STEP 1: Add import at top of master_projection_engine.py
+----------------------------------------------------------
+
+Add this import near the other imports:
+
+from model_performance.save_predictions_helper import save_predictions, format_game_prediction
+
+
+STEP 2: Collect predictions while running games
+------------------------------------------------
+
+Find the section where you run projections for tonight's games.
+
+BEFORE (current code - example):
+```python
+if __name__ == "__main__":
+    engine = MasterProjectionEngine()
+
+    # Get tonight's games
+    games = engine.get_todays_games()
+
+    for game in games:
+        result = engine.run_full_pipeline(
+            game['home_team'],
+            game['away_team'],
+            injury_adjustment=True,
+            rest_adjustment=True,
+            pace_adjustment=True
+        )
+
+        # Print results...
+        engine.print_projection_summary(result, game['home_team'], game['away_team'])
+```
+
+AFTER (with prediction saving):
+```python
+if __name__ == "__main__":
+    from datetime import datetime
+    from model_performance.save_predictions_helper import save_predictions, format_game_prediction
+
+    engine = MasterProjectionEngine()
+
+    # Get tonight's games
+    games = engine.get_todays_games()
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    # Collect predictions
+    predictions_to_save = []
+
+    for game in games:
+        result = engine.run_full_pipeline(
+            game['home_team'],
+            game['away_team'],
+            injury_adjustment=True,
+            rest_adjustment=True,
+            pace_adjustment=True
+        )
+
+        # Print results...
+        engine.print_projection_summary(result, game['home_team'], game['away_team'])
+
+        # Save prediction for later evaluation
+        predictions_to_save.append(
+            format_game_prediction(game['home_team'], game['away_team'], result)
+        )
+
+    # Save all predictions to JSON
+    save_predictions(today, predictions_to_save)
+```
+
+
+STEP 3: Make sure run_full_pipeline() returns the right data
+-------------------------------------------------------------
+
+The result dict from run_full_pipeline() should include:
+
+{
+    'baseline_spread': float,        # Baseline spread
+    'rest_module_spread': float,     # Rest-adjusted spread
+    'baseline_total': float,         # Baseline total
+    'pace_module_total': float,      # Pace-adjusted total
+    'home_total_adjustment': float,  # Total injury impact home team
+    'away_total_adjustment': float   # Total injury impact away team
+}
+
+If your return dict uses different keys, adjust format_game_prediction() accordingly.
+
+
+STEP 4: Test the integration
+-----------------------------
+
+Run your model as normal:
+
+  python3 master_projection_engine.py
+
+You should see at the end:
+
+  ✓ Saved predictions to: model_output/2025-12-11_projections.json
+
+
+STEP 5: Verify the JSON file
+-----------------------------
+
+Check that the file was created:
+
+  cat model_output/2025-12-11_projections.json
+
+Should look like:
+{
+  "date": "2025-12-11",
+  "timestamp": "2025-12-11T18:30:00",
+  "games": [
+    {
+      "home_team": "Milwaukee Bucks",
+      "away_team": "Boston Celtics",
+      "spread": {
+        "baseline": -4.2,
+        "rest_adjusted": -4.0
+      },
+      "total": {
+        "baseline": 242.9,
+        "pace_adjusted": 242.9
+      },
+      "injury_impact": {
+        "home_total_adjustment": -3.2,
+        "away_total_adjustment": 0.0
+      }
+    }
+  ]
+}
+
+
+STEP 6: Run outcome fetcher the next day
+-----------------------------------------
+
+The next day, after games complete, run:
+
+  python3 model_performance/outcome_fetcher.py
+
+This will automatically:
+  1. Fetch yesterday's results
+  2. Load your predictions
+  3. Get closing odds
+  4. Evaluate correctness
+  5. Log to model_performance_log.csv
+
+
+COMPLETE WORKFLOW EXAMPLE
+--------------------------
+
+December 11, 2025 (Game Day):
+  1. Run: python3 master_projection_engine.py
+  2. Model makes predictions
+  3. Predictions saved to: model_output/2025-12-11_projections.json
+  4. You use the picks for betting/analysis
+
+December 12, 2025 (Next Day):
+  1. Run: python3 model_performance/outcome_fetcher.py
+  2. Script fetches Dec 11 results
+  3. Script loads Dec 11 predictions
+  4. Script evaluates correctness
+  5. Results logged to: model_performance/model_performance_log.csv
+
+December 13+:
+  - Analyze your model_performance_log.csv to see:
+    • Win rate by pick type
+    • Win rate by confidence band
+    • Win rate with/without injuries
+    • Which edge sizes are most profitable
+
+
+ALTERNATIVE: Manual JSON Creation
+----------------------------------
+
+If you don't want to modify master_projection_engine.py yet, you can manually
+create the JSON file after running projections.
+
+Example:
+{
+  "date": "2025-12-11",
+  "timestamp": "2025-12-11T20:00:00",
+  "games": [
+    {
+      "home_team": "Milwaukee Bucks",
+      "away_team": "Boston Celtics",
+      "spread": {
+        "baseline": -4.2,
+        "rest_adjusted": -4.0
+      },
+      "total": {
+        "baseline": 242.9,
+        "pace_adjusted": 242.9
+      },
+      "injury_impact": {
+        "home_total_adjustment": -3.2,
+        "away_total_adjustment": 0.0
+      }
+    }
+  ]
+}
+
+Save this to: model_output/2025-12-11_projections.json
+
+Then run outcome_fetcher.py the next day.
+
+
+IMPORTANT NOTES
+---------------
+
+✓ The outcome fetcher does NOT modify your model
+✓ The outcome fetcher does NOT change predictions
+✓ The outcome fetcher ONLY logs results for tracking
+✓ This is purely an observational/tracking layer
+
+You can choose to integrate now or later - the system is ready either way.

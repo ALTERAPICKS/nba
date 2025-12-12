@@ -1,0 +1,200 @@
+AUTOMATIC PERFORMANCE TRACKING WORKFLOW
+========================================
+
+The prediction engine now automatically handles performance tracking!
+
+WHAT HAPPENS WHEN YOU RUN THE MODEL
+------------------------------------
+
+When you run:
+  python3 master_projection_engine.py
+
+The system now does THREE things automatically:
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │ STEP 1: EVALUATE YESTERDAY'S PREDICTIONS                    │
+  │ - Fetches yesterday's completed games from ESPN             │
+  │ - Gets final scores and closing odds                        │
+  │ - Loads yesterday's saved predictions                       │
+  │ - Evaluates spread and total correctness                    │
+  │ - Logs results to model_performance_log.csv                 │
+  └─────────────────────────────────────────────────────────────┘
+                              ↓
+  ┌─────────────────────────────────────────────────────────────┐
+  │ STEP 2: MAKE TODAY'S PREDICTIONS                            │
+  │ - Fetches today's games                                     │
+  │ - Runs full projection pipeline                             │
+  │ - Applies injury, rest, pace adjustments                    │
+  │ - Prints projections and summary                            │
+  └─────────────────────────────────────────────────────────────┘
+                              ↓
+  ┌─────────────────────────────────────────────────────────────┐
+  │ STEP 3: SAVE TODAY'S PREDICTIONS                            │
+  │ - Formats predictions as JSON                               │
+  │ - Saves to model_output/YYYY-MM-DD_projections.json         │
+  │ - Ready for tomorrow's evaluation                           │
+  └─────────────────────────────────────────────────────────────┘
+
+
+EXAMPLE OUTPUT
+--------------
+
+When you run the model, you'll see:
+
+================================================================================
+NBA MASTER PROJECTION ENGINE - December 12, 2025
+================================================================================
+
+================================================================================
+EVALUATING YESTERDAY'S PREDICTIONS
+================================================================================
+
+[1] Fetching yesterday's completed games...
+  ✓ Found 4 completed game(s)
+
+[2] Loading model predictions for 2025-12-11...
+  ✓ Loaded predictions for 4 game(s)
+
+[3] Evaluating model performance...
+
+  Processing: BOS@MIL
+    Final Score: Boston Celtics 120 @ Milwaukee Bucks 113
+    Market: Spread=-2.5, Total=235.5
+    ✓ Logged: spread_big_edge (CORRECT)
+    ✓ Logged: total_under_value (INCORRECT)
+
+  Processing: POR@NOP
+    Final Score: Portland Trail Blazers 118 @ New Orleans Pelicans 117
+    Market: Spread=+1.0, Total=237.5
+    ✓ Logged: spread_dog_value (CORRECT)
+    ✓ Logged: total_over_value (CORRECT)
+
+================================================================================
+SUMMARY: Logged 6 pick(s) to performance tracker
+================================================================================
+
+✓ Found 3 games today
+
+================================================================================
+GAME 1/3
+================================================================================
+[... today's projections ...]
+
+================================================================================
+PROJECTION SUMMARY - 3 GAMES
+================================================================================
+[... summary of today's picks ...]
+
+================================================================================
+SAVING TODAY'S PREDICTIONS
+================================================================================
+
+✓ Saved predictions to: model_output/2025-12-12_projections.json
+✓ Saved 3 prediction(s) for future evaluation
+
+
+CONTINUOUS WORKFLOW LOOP
+-------------------------
+
+Day 1 (Dec 11):
+  Run: python3 master_projection_engine.py
+  ├─ No yesterday's predictions to evaluate (first run)
+  ├─ Makes Dec 11 predictions
+  └─ Saves to model_output/2025-12-11_projections.json
+
+Day 2 (Dec 12):
+  Run: python3 master_projection_engine.py
+  ├─ Evaluates Dec 11 predictions (loaded from JSON)
+  ├─ Logs results to model_performance_log.csv
+  ├─ Makes Dec 12 predictions
+  └─ Saves to model_output/2025-12-12_projections.json
+
+Day 3 (Dec 13):
+  Run: python3 master_projection_engine.py
+  ├─ Evaluates Dec 12 predictions
+  ├─ Logs results to model_performance_log.csv
+  ├─ Makes Dec 13 predictions
+  └─ Saves to model_output/2025-12-13_projections.json
+
+And so on... Every day it evaluates yesterday while making today's predictions!
+
+
+WHAT IF THERE ARE NO GAMES YESTERDAY?
+--------------------------------------
+
+The system handles this gracefully:
+
+  ✓ If no games yesterday → Skips evaluation, continues with today
+  ✓ If no predictions file → Skips evaluation, continues with today
+  ✓ If API errors → Skips that step, continues with today
+
+Your predictions ALWAYS run, performance tracking is just a bonus.
+
+
+WHAT IF I DON'T WANT AUTOMATIC TRACKING?
+-----------------------------------------
+
+Performance tracking is automatically disabled if the modules aren't found.
+
+To disable:
+1. Simply rename the model_performance folder
+2. Or delete the performance tracking imports
+
+The model will still run normally, just without the tracking features.
+
+
+CHECKING YOUR PERFORMANCE DATA
+-------------------------------
+
+View your performance log:
+  cat model_performance/model_performance_log.csv
+
+Or open in Excel/Google Sheets for analysis:
+  open model_performance/model_performance_log.csv
+
+
+MANUAL EVALUATION (If Needed)
+------------------------------
+
+If you ever need to manually evaluate a specific day:
+
+  python3 model_performance/outcome_fetcher.py
+
+This will evaluate yesterday's games independently.
+
+
+FILES CREATED AUTOMATICALLY
+----------------------------
+
+model_output/YYYY-MM-DD_projections.json:
+  - Your model's predictions for that date
+  - Used for evaluation the next day
+  - JSON format, human-readable
+
+model_performance/model_performance_log.csv:
+  - All evaluation results over time
+  - CSV format for easy analysis
+  - Append-only, never overwrites
+
+
+BENEFITS OF AUTOMATIC TRACKING
+-------------------------------
+
+✓ Zero extra work - just run the model as normal
+✓ Never forget to save predictions
+✓ Never forget to evaluate yesterday's results
+✓ Builds historical performance data automatically
+✓ Track win rates, edge accuracy, injury impact
+✓ Identify which pick types are most profitable
+✓ See confidence bands that perform best
+
+
+IMPORTANT NOTES
+---------------
+
+❗ Performance tracking does NOT affect predictions
+❗ If evaluation fails, predictions still run normally
+❗ All tracking runs in try/except blocks (fail-safe)
+❗ You can always disable tracking without breaking the model
+
+This is a pure observational layer that runs alongside your model!

@@ -1,0 +1,191 @@
+MODEL PERFORMANCE TRACKING SYSTEM - USAGE GUIDE
+================================================
+
+This system tracks model correctness WITHOUT storing game scores or outcomes.
+It runs independently from the prediction pipeline.
+
+FOLDER STRUCTURE
+----------------
+/model_performance/
+  - performance_logger.py      (Logger module)
+  - model_performance_log.csv  (Performance data)
+  - USAGE_GUIDE.txt           (This file)
+
+BASIC USAGE
+-----------
+
+from model_performance.performance_logger import log_model_performance
+
+log_model_performance({
+    "date": "2025-12-11",
+    "game_id": "BOS@MIL",
+    "pick_type": "spread_big_edge",
+    "edge_points": 4.5,
+    "model_line": -7.1,
+    "market_line": -2.6,
+    "result_correct": True,
+    "variance_flag": "normal",
+    "injury_flag": "major",
+    "notes": "Giannis OUT"
+})
+
+REQUIRED FIELDS
+---------------
+
+date (str)
+  Format: YYYY-MM-DD
+  Example: "2025-12-11"
+
+game_id (str)
+  Format: TEAM1@TEAM2 (uppercase, no spaces)
+  Examples: "BOS@MIL", "POR@NOP", "DEN@SAC"
+  ❌ Invalid: "bos@mil", "BOS @ MIL", "MIL-BOS"
+
+pick_type (str)
+  Valid options:
+    Spreads:
+      - spread_dog_value     (Underdog with value)
+      - spread_fav_small     (Small favorite)
+      - spread_big_edge      (Large edge on spread)
+      - flipped_favorite     (Model disagrees with market favorite)
+
+    Totals:
+      - total_over_value     (Over with value)
+      - total_over_big_edge  (Large edge on over)
+      - total_under_value    (Under with value)
+      - total_under_big_edge (Large edge on under)
+
+edge_points (float)
+  Difference between model line and market line
+  Example: 4.5 (model -7.1, market -2.6 → 4.5 point edge)
+
+model_line (float)
+  Your model's projected line
+  Example: -7.1 (Boston favored by 7.1)
+
+market_line (float)
+  The actual market/Vegas line
+  Example: -2.6
+
+result_correct (bool)
+  Was the pick correct?
+  Use: True or False (Python boolean, not string)
+
+variance_flag (str)
+  Game variance level
+  Valid options:
+    - "normal"        (Standard game conditions)
+    - "high_variance" (Overtime, close game, unusual pace)
+
+injury_flag (str)
+  Injury impact on game
+  Valid options:
+    - "none"  (No significant injuries)
+    - "minor" (Role player injuries)
+    - "major" (Star player injuries)
+
+notes (str, optional)
+  Additional context
+  Example: "Giannis OUT", "B2B game", "Playoff intensity"
+
+AUTOMATIC CALCULATIONS
+-----------------------
+
+confidence_band (auto-calculated from edge_points):
+  0.0 - 1.9 points  → "low"
+  2.0 - 3.9 points  → "medium"
+  4.0 - 5.9 points  → "high"
+  6.0+ points       → "elite"
+
+EXAMPLE USAGE SCENARIOS
+------------------------
+
+Scenario 1: Spread pick with major injury
+------------------------------------------
+log_model_performance({
+    "date": "2025-12-11",
+    "game_id": "BOS@MIL",
+    "pick_type": "spread_big_edge",
+    "edge_points": 4.5,
+    "model_line": -7.1,
+    "market_line": -2.6,
+    "result_correct": True,
+    "variance_flag": "normal",
+    "injury_flag": "major",
+    "notes": "Giannis OUT, market slow to adjust"
+})
+
+Scenario 2: Total over pick, no injuries
+-----------------------------------------
+log_model_performance({
+    "date": "2025-12-11",
+    "game_id": "POR@NOP",
+    "pick_type": "total_over_value",
+    "edge_points": 3.0,
+    "model_line": 240.6,
+    "market_line": 237.6,
+    "result_correct": False,
+    "variance_flag": "normal",
+    "injury_flag": "none",
+    "notes": "Fast pace matchup"
+})
+
+Scenario 3: Flipped favorite (model disagrees with market)
+-----------------------------------------------------------
+log_model_performance({
+    "date": "2025-12-11",
+    "game_id": "DEN@SAC",
+    "pick_type": "flipped_favorite",
+    "edge_points": 8.5,
+    "model_line": -6.3,
+    "market_line": 2.2,  # Market has SAC favored
+    "result_correct": True,
+    "variance_flag": "normal",
+    "injury_flag": "major",
+    "notes": "Sabonis OUT, model adjusted correctly"
+})
+
+VALIDATION ERRORS
+-----------------
+
+The logger will raise ValueError for:
+  ❌ Invalid pick_type
+  ❌ Invalid game_id format (must be TEAM1@TEAM2, uppercase)
+  ❌ Invalid variance_flag
+  ❌ Invalid injury_flag
+  ❌ Missing required fields
+  ❌ Non-numeric values for numeric fields
+  ❌ Non-boolean value for result_correct
+
+DATA SAFETY
+-----------
+
+✓ CSV is created automatically if missing
+✓ Headers are written only once
+✓ New entries are APPENDED (never overwrites existing data)
+✓ No game scores or outcomes are stored
+✓ Safe to run concurrently (append-only)
+
+CSV OUTPUT FORMAT
+-----------------
+
+date,game_id,pick_type,edge_points,model_line,market_line,result_correct,confidence_band,variance_flag,injury_flag,notes
+2025-12-11,BOS@MIL,spread_big_edge,4.5,-7.1,-2.6,TRUE,high,normal,major,Giannis OUT
+2025-12-11,POR@NOP,spread_dog_value,1.5,-0.9,0.6,FALSE,low,normal,minor,Low edge test
+
+TESTING
+-------
+
+Run the module directly to test:
+  python3 model_performance/performance_logger.py
+
+This will create a test entry and verify the system works.
+
+NOTES
+-----
+
+- This system does NOT import any prediction logic
+- It runs independently from master_projection_engine.py
+- You manually call log_model_performance() after games complete
+- No automatic integration with the model pipeline
+- Pure observer layer for tracking performance over time

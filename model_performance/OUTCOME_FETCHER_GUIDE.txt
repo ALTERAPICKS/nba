@@ -1,0 +1,240 @@
+OUTCOME FETCHER - AUTOMATIC MODEL EVALUATION
+=============================================
+
+This script automatically evaluates your model's predictions by comparing them
+to actual game results and market closing odds.
+
+⚠️  IMPORTANT: This script is OBSERVATIONAL ONLY - it does NOT modify the model.
+
+WHAT IT DOES
+------------
+
+1. Fetches yesterday's completed NBA games from ESPN API
+2. Gets final scores for each game
+3. Retrieves closing odds (spread + total) from ESPN
+4. Loads your model's predictions from JSON file
+5. Evaluates if your model's picks were correct
+6. Logs results to model_performance_log.csv
+
+HOW TO USE
+----------
+
+STEP 1: Save your predictions when running the model
+-----------------------------------------------------
+
+Your master_projection_engine.py needs to save predictions to JSON.
+
+Option A: Manual integration (recommended for now)
+After running projections, manually create a JSON file:
+
+  /model_output/2025-12-11_projections.json
+
+Format:
+{
+  "date": "2025-12-11",
+  "timestamp": "2025-12-11T20:30:00",
+  "games": [
+    {
+      "home_team": "Milwaukee Bucks",
+      "away_team": "Boston Celtics",
+      "spread": {
+        "baseline": -4.2,
+        "rest_adjusted": -4.0
+      },
+      "total": {
+        "baseline": 242.9,
+        "pace_adjusted": 242.9
+      },
+      "injury_impact": {
+        "home_total_adjustment": -3.2,
+        "away_total_adjustment": 0.0
+      }
+    }
+  ]
+}
+
+Option B: Use the helper script
+See save_predictions_helper.py for integration examples.
+
+
+STEP 2: Run the outcome fetcher the next day
+---------------------------------------------
+
+After games complete (next day), run:
+
+  cd /Users/michaelhernandez/nba_prediction_system
+  python3 model_performance/outcome_fetcher.py
+
+This will:
+  ✓ Fetch yesterday's completed games
+  ✓ Load yesterday's predictions
+  ✓ Get market closing odds
+  ✓ Evaluate correctness
+  ✓ Log results automatically
+
+
+WHAT IT EVALUATES
+-----------------
+
+For EACH game, the script evaluates:
+
+1. SPREAD PREDICTION
+   - Did you have an edge? (model line vs market line)
+   - If edge ≥ 1.0 points, evaluate correctness
+   - Check: Did the team you favored cover ATS?
+
+2. TOTAL PREDICTION
+   - Did you have an edge? (model total vs market total)
+   - If edge ≥ 2.0 points, evaluate correctness
+   - Check: Did the game go Over/Under as you predicted?
+
+
+EDGE THRESHOLDS
+---------------
+
+Spreads:
+  - Minimum edge: 1.0 points (otherwise skipped)
+  - Edges < 1.0 considered "no pick"
+
+Totals:
+  - Minimum edge: 2.0 points (otherwise skipped)
+  - Edges < 2.0 considered "no pick"
+
+
+PICK TYPE CLASSIFICATION
+-------------------------
+
+Spreads:
+  - flipped_favorite    (Model disagrees on who should be favored)
+  - spread_big_edge     (Edge ≥ 4.0 points)
+  - spread_dog_value    (Edge ≥ 2.0, market has team as underdog)
+  - spread_fav_small    (Edge ≥ 2.0, market has team as favorite)
+
+Totals:
+  - total_over_big_edge    (Edge ≥ 4.0, model projects higher)
+  - total_under_big_edge   (Edge ≥ 4.0, model projects lower)
+  - total_over_value       (Edge ≥ 2.0, model projects higher)
+  - total_under_value      (Edge ≥ 2.0, model projects lower)
+
+
+VARIANCE & INJURY FLAGS
+------------------------
+
+Variance Flag (auto-detected):
+  - high_variance: Close game (≤3 pts) OR very high scoring (≥260)
+  - normal: Standard game conditions
+
+Injury Flag (from your prediction data):
+  - major: Injury impact ≥ 2.0 points
+  - minor: Injury impact ≥ 0.5 points
+  - none: Injury impact < 0.5 points
+
+
+EXAMPLE OUTPUT
+--------------
+
+================================================================================
+NBA MODEL OUTCOME FETCHER
+================================================================================
+
+[1] Fetching yesterday's completed games...
+  ✓ Found 4 completed game(s)
+
+[2] Loading model predictions for 2025-12-11...
+  ✓ Loaded predictions for 4 game(s)
+
+[3] Evaluating model performance...
+
+  Processing: BOS@MIL
+    Final Score: Boston Celtics 120 @ Milwaukee Bucks 113
+    Market: Spread=-2.5, Total=235.5
+    ✓ Logged: spread_big_edge (CORRECT)
+    ✓ Logged: total_over_value (INCORRECT)
+
+  Processing: POR@NOP
+    Final Score: Portland Trail Blazers 118 @ New Orleans Pelicans 117
+    Market: Spread=+1.0, Total=237.5
+    ✓ Logged: spread_dog_value (CORRECT)
+    ✓ Logged: total_over_value (CORRECT)
+
+================================================================================
+SUMMARY: Logged 6 pick(s) to performance tracker
+================================================================================
+
+
+LOGGED DATA
+-----------
+
+Results are automatically logged to:
+  /model_performance/model_performance_log.csv
+
+Example entries:
+date,game_id,pick_type,edge_points,model_line,market_line,result_correct,...
+2025-12-11,BOS@MIL,spread_big_edge,4.5,-7.1,-2.6,TRUE,high,normal,major,...
+2025-12-11,POR@NOP,total_over_value,3.1,240.6,237.5,TRUE,medium,normal,minor,...
+
+
+DEFENSIVE FEATURES
+------------------
+
+✓ Skips games that aren't finalized
+✓ Skips games with missing predictions
+✓ Skips games with missing market odds
+✓ Skips picks below edge thresholds
+✓ Handles API timeouts gracefully
+✓ Validates all data before logging
+
+
+TROUBLESHOOTING
+---------------
+
+Issue: "No prediction file found"
+Solution: Make sure you saved predictions to model_output/YYYY-MM-DD_projections.json
+
+Issue: "No completed games found for yesterday"
+Solution: Run this the day AFTER games complete (e.g., run on Dec 12 for Dec 11 games)
+
+Issue: "Could not fetch odds"
+Solution: ESPN's odds API is sometimes unavailable. The script will skip those games.
+
+Issue: "No prediction found"
+Solution: game_id format must match. Check team abbreviations in TEAM_ABBREV_MAP.
+
+
+MANUAL TESTING
+--------------
+
+To test with a specific date:
+
+python3 -c "
+from model_performance.outcome_fetcher import OutcomeFetcher
+from datetime import datetime, timedelta
+
+# Test with a specific date
+fetcher = OutcomeFetcher()
+# Modify fetcher to use a different date...
+"
+
+Or simply create a prediction file for a past date and run the script.
+
+
+FREQUENCY
+---------
+
+Run this script ONCE per day, the day after games complete.
+
+Example schedule:
+- Dec 11: Games played, model makes predictions
+- Dec 11: Save predictions to model_output/2025-12-11_projections.json
+- Dec 12: Run outcome_fetcher.py to evaluate Dec 11 predictions
+
+
+IMPORTANT NOTES
+---------------
+
+❗ This script does NOT modify any model logic
+❗ This script does NOT change predictions
+❗ This script does NOT write data back into the model
+❗ This script ONLY writes to model_performance_log.csv
+
+The outcome fetcher is purely observational and runs independently.
