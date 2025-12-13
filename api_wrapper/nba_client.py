@@ -1,40 +1,57 @@
-from nba_api.stats.endpoints import teamdashboardbygeneralsplits
 import time
+from nba_api.stats.endpoints import leaguedashteamstats
 
 SEASON = "2025-26"
+SEASON_TYPE = "Regular Season"
+API_SLEEP = 0.6
 
-def _overall_row(df):
-    """
-    Extract ONLY the 'Overall' row.
-    This is where OFF_RATING / DEF_RATING / PACE live.
-    """
-    if "GROUP_SET" in df.columns:
-        overall = df[df["GROUP_SET"] == "Overall"]
-        if not overall.empty:
-            return overall.iloc[0].to_dict()
-    return {}
 
-def get_team_dashboard(team_id: int, last_n_games: int = 5):
-    time.sleep(0.6)  # NBA API safety
+def _sleep():
+    time.sleep(API_SLEEP)
 
-    dashboard = teamdashboardbygeneralsplits.TeamDashboardByGeneralSplits(
-        team_id=team_id,
+
+def _get_row(df, team_id):
+    row = df[df["TEAM_ID"] == team_id]
+    if row.empty:
+        raise RuntimeError("Team not found in NBA response")
+    return row.iloc[0]
+
+
+def _pull(team_id, last_n_games, measure_type):
+    _sleep()
+
+    dash = leaguedashteamstats.LeagueDashTeamStats(
         season=SEASON,
-        last_n_games=last_n_games
+        season_type_all_star=SEASON_TYPE,
+        team_id_nullable=team_id,
+        last_n_games=last_n_games,
+        pace_adjust="Y",
+        per_mode_detailed="Per100Possessions",
+        measure_type_detailed=measure_type
     )
 
-    dfs = dashboard.get_data_frames()
+    df = dash.get_data_frames()[0]
+    return _get_row(df, team_id)
 
-    if len(dfs) < 6:
-        raise RuntimeError("Unexpected NBA API response shape")
+
+# --------------------------------------------------
+# PUBLIC FUNCTION — EXACT NBA.com TEAM STATS
+# --------------------------------------------------
+def get_team_stats(team_id: int, last_n_games: int = 5):
+    """
+    Mirrors NBA.com Team Stats tabs with Last N Games + Pace Adjust ON
+    """
 
     return {
         "team_id": team_id,
         "last_n_games": last_n_games,
-        "Base": _overall_row(dfs[0]),
-        "Advanced": _overall_row(dfs[1]),      # ✅ OFF_RATING / DEF_RATING / PACE
-        "Misc": _overall_row(dfs[2]),
-        "Four Factors": _overall_row(dfs[3]),
-        "Scoring": _overall_row(dfs[4]),
-        "Opponent": _overall_row(dfs[5])
+
+        # --- NBA.com tabs ---
+        "advanced": dict(_pull(team_id, last_n_games, "Advanced")),
+        "traditional": dict(_pull(team_id, last_n_games, "Base")),
+        "four_factors": dict(_pull(team_id, last_n_games, "Four Factors")),
+        "misc": dict(_pull(team_id, last_n_games, "Misc")),
+        "scoring": dict(_pull(team_id, last_n_games, "Scoring")),
+        "opponent": dict(_pull(team_id, last_n_games, "Opponent")),
+        "shooting": dict(_pull(team_id, last_n_games, "Shooting"))
     }
