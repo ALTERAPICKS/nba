@@ -1,11 +1,11 @@
 import time
 from nba_api.stats.endpoints import leaguedashteamstats
-from nba_api.library.http import NBAStatsHTTP
+from nba_api.library.http import HTTPRequest
 
 # --------------------------------------------------
 # NBA anti-bot headers (REQUIRED in cloud)
 # --------------------------------------------------
-NBAStatsHTTP.DEFAULT_HEADERS = {
+HTTPRequest.DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
@@ -37,9 +37,6 @@ def _get_team_row(df, team_id: int):
 
 
 def _pull_measure(team_id: int, last_n_games: int, measure_type: str):
-    """
-    Pull a single Team Stats tab exactly as NBA.com does it.
-    """
     _sleep()
 
     dash = leaguedashteamstats.LeagueDashTeamStats(
@@ -64,15 +61,6 @@ def get_team_stats(team_id: int, last_n_games: int = 5):
     Mirrors NBA.com Team Stats with:
     - Last N Games
     - Pace Adjust ON
-
-    Tabs returned:
-    - Advanced
-    - Traditional
-    - Four Factors
-    - Misc
-    - Scoring
-    - Opponent
-    - Shooting
     """
 
     return {
